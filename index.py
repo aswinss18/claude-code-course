@@ -35,9 +35,9 @@ def add_assistant_message(messages, content):
     messages.append(assitant_message)    
 
 
-def chat(messages,system=None):
+def chat(messages,system=None,temperature=0):
 
-    params={"model":model,"max_tokens":1024,"messages":messages}
+    params={"model":model,"max_tokens":1024,"messages":messages,"temperature":temperature}
 
     if system:
         params["system"]=system
@@ -61,7 +61,7 @@ async def chatting(chat_request: ChatRequest):
     try:
         user_input = chat_request.message
         add_user_message(messages, user_input)
-        response = chat(messages,system=system_prompt)
+        response = chat(messages,system=system_prompt,temperature=0)
         add_assistant_message(messages, response)
         return {"message": response,"messageHistory": messages}
     except Exception as e:
