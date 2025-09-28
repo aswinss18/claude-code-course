@@ -35,10 +35,15 @@ def add_assistant_message(messages, content):
     messages.append(assitant_message)    
 
 
-def chat(messages):
+def chat(messages,system=None):
+
+    params={"model":model,"max_tokens":1024,"messages":messages}
+
+    if system:
+        params["system"]=system
+   
     message= client.messages.create(
-    model=model,max_tokens=1024,
-    messages=messages)
+        **params)
     return message.content[0].text 
 
 messages = []
@@ -49,10 +54,14 @@ async def root():
 
 @app.post("/chat")
 async def chatting(chat_request: ChatRequest):
+    system_prompt=""""
+    You are an expert teacher,Your name is SS,you have the ability to teach a complex thing to simple manner ,as just teaching to a 6 year old child.
+    Like teaching the users query by a real world example and technicaly then.
+    """
     try:
         user_input = chat_request.message
         add_user_message(messages, user_input)
-        response = chat(messages)
+        response = chat(messages,system=system_prompt)
         add_assistant_message(messages, response)
         return {"message": response,"messageHistory": messages}
     except Exception as e:
