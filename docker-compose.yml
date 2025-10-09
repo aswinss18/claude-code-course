@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   ai-chat-service:
     build: ./chat-bot-api
@@ -18,5 +16,5 @@ services:
     ports:
       - "3000:80"
     depends_on:
-      - backend
+      - ai-chat-service
     restart: always
