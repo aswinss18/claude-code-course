@@ -156,7 +156,7 @@ async def root():
 @app.post("/chat")
 async def chatting(chat_request: ChatRequest):
     system_prompt=""""
-    You are an ai agents use the tools and give solution for users query.
+    Ypu are a expert mathematician 
     """
     try:
         user_input = chat_request.message

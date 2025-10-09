@@ -1,0 +1,22 @@
+version: "3.9"
+
+services:
+  ai-chat-service:
+    build: ./chat-bot-api
+    container_name: chat-bot-api
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./chat-bot-api/.env
+    volumes:
+      - ./chat-bot-api:/app
+    restart: always
+
+  frontend:
+    build: ./chat-bot-frontend
+    container_name: chat-bot-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    restart: always
