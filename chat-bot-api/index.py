@@ -3,12 +3,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from anthropic import Anthropic
 from anthropic.types import ToolParam
-from fastapi import Request
 from pydantic import BaseModel
-from datetime import datetime,timedelta
+from datetime import datetime, timedelta
 import uvicorn
 import traceback
-
+import os
 
 load_dotenv()
 
@@ -17,44 +16,48 @@ app = FastAPI()
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allows all origins
+    allow_origins=["*"],  # In production, specify your frontend domain
     allow_credentials=True,
-    allow_methods=["*"],  # Allows all methods
-    allow_headers=["*"],  # Allows all headers
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-client = Anthropic()
-model = "claude-3-haiku-20240307"
+# Initialize Anthropic client with API key from environment
+client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+
+# Use latest model for better performance
+model = "claude-sonnet-4-5-20250929"  # Updated from claude-3-haiku
 
 class ChatRequest(BaseModel):
     message: str
 
 def add_user_message(messages, content):
-    user_message= {"role": "user", "content": content}
+    user_message = {"role": "user", "content": content}
     messages.append(user_message)
 
 def add_assistant_message(messages, content):
-    assitant_message= {"role": "assistant", "content": content}
-    messages.append(assitant_message)    
+    assistant_message = {"role": "assistant", "content": content}
+    messages.append(assistant_message)
+
 def get_current_datetime(format="%Y-%m-%d %H:%M:%S"):
     if not format:
         raise ValueError("Format string cannot be empty")
     return datetime.now().strftime(format)
 
-get_current_datetime_schema=ToolParam({
-  "name": "get_current_datetime",
-  "description": "Get the current date and time in a specified format",
-  "input_schema": {
-    "type": "object",
-    "properties": {
-      "format": {
-        "type": "string",
-        "description": "Python strftime format string (e.g., '%Y-%m-%d %H:%M:%S', '%B %d, %Y')",
-        "default": "%Y-%m-%d %H:%M:%S"
-      }
-    },
-    "additionalProperties": False
-  }
+get_current_datetime_schema = ToolParam({
+    "name": "get_current_datetime",
+    "description": "Get the current date and time in a specified format",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "format": {
+                "type": "string",
+                "description": "Python strftime format string (e.g., '%Y-%m-%d %H:%M:%S', '%B %d, %Y')",
+                "default": "%Y-%m-%d %H:%M:%S"
+            }
+        },
+        "additionalProperties": False
+    }
 })
 
 def add_duration_to_datetime(
@@ -83,19 +86,8 @@ def add_duration_to_datetime(
             date.day,
             [
                 31,
-                29
-                if year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)
-                else 28,
-                31,
-                30,
-                31,
-                30,
-                31,
-                31,
-                30,
-                31,
-                30,
-                31,
+                29 if year % 4 == 0 and (year % 100 != 0 or year % 400 == 0) else 28,
+                31, 30, 31, 30, 31, 31, 30, 31, 30, 31,
             ][month - 1],
         )
         new_date = date.replace(year=year, month=month, day=day)
@@ -106,21 +98,28 @@ def add_duration_to_datetime(
 
     return new_date.strftime("%A, %B %d, %Y %I:%M:%S %p")
 
-
 def process_tool_call(tool_name, tool_input):
     if tool_name == "get_current_datetime":
         return get_current_datetime(tool_input.get("format", "%Y-%m-%d %H:%M:%S"))
     else:
         return f"Unknown tool: {tool_name}"
 
-def chat(messages,system=None,temperature=0,stop_sequences=[]):
+def chat(messages, system=None, temperature=0, stop_sequences=None):
+    if stop_sequences is None:
+        stop_sequences = []
 
-    params={"model":model,"max_tokens":1024,"messages":messages,"temperature":temperature,"tools":[get_current_datetime_schema]}
+    params = {
+        "model": model,
+        "max_tokens": 1024,
+        "messages": messages,
+        "temperature": temperature,
+        "tools": [get_current_datetime_schema]
+    }
 
     if system:
-        params["system"]=system
+        params["system"] = system
 
-    message= client.messages.create(**params)
+    message = client.messages.create(**params)
 
     # Handle tool use loop
     while message.stop_reason == "tool_use":
@@ -147,7 +146,9 @@ def chat(messages,system=None,temperature=0,stop_sequences=[]):
 
     return message.content
 
-messages = []
+# Use a dictionary to store conversation history per session
+# In production, use Redis or a database
+conversation_store = {}
 
 @app.get("/")
 async def root():
@@ -155,13 +156,20 @@ async def root():
 
 @app.post("/chat")
 async def chatting(chat_request: ChatRequest):
-    system_prompt=""""
-    Ypu are a expert mathematician 
+    system_prompt = """
+    You are an expert mathematician and helpful assistant.
     """
     try:
+        # For this simple version, use a global messages list
+        # In production, use session IDs
+        if "default" not in conversation_store:
+            conversation_store["default"] = []
+        
+        messages = conversation_store["default"]
+        
         user_input = chat_request.message
         add_user_message(messages, user_input)
-        response = chat(messages,system=system_prompt,temperature=0,stop_sequences=[])
+        response = chat(messages, system=system_prompt, temperature=0, stop_sequences=[])
         add_assistant_message(messages, response)
 
         # Extract text from content blocks for React frontend
@@ -170,12 +178,17 @@ async def chatting(chat_request: ChatRequest):
             if hasattr(block, 'text'):
                 response_text += block.text
 
-        return {"message": response_text,"messageHistory": messages}
+        return {"message": response_text, "messageHistory": messages}
     except Exception as e:
         print(f"Error: {str(e)}")
         print(f"Traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
 
+@app.post("/reset")
+async def reset_conversation():
+    """Reset conversation history"""
+    conversation_store["default"] = []
+    return {"message": "Conversation reset successfully"}
+
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)
-
