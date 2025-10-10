@@ -23,10 +23,13 @@ app.add_middleware(
 )
 
 # Initialize Anthropic client with API key from environment
-client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+api_key = os.getenv("ANTHROPIC_API_KEY")
+if not api_key:
+    raise ValueError("ANTHROPIC_API_KEY environment variable is required")
+client = Anthropic(api_key=api_key)
 
 # Use latest model for better performance
-model = "claude-sonnet-4-5-20250929"  # Updated from claude-3-haiku
+model = "claude-3-haiku-20240307"  # Using a stable model
 
 class ChatRequest(BaseModel):
     message: str

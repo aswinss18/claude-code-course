@@ -1,3 +1,12 @@
+# Git
+.git
+.gitignore
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose.yml
+
 # Dependencies
 node_modules/
 npm-debug.log*
@@ -6,13 +15,13 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-# Production builds
+# Production builds (exclude from build context, but may be needed for multi-stage builds)
 dist/
 dist-ssr/
 build/
 
-# Environment variables
-.env
+# Environment variables (keep .env for Docker build if needed)
+# .env
 .env.local
 .env.development.local
 .env.test.local
@@ -28,11 +37,9 @@ pids/
 *.seed
 *.pid.lock
 
-# Coverage directory used by tools like istanbul
+# Coverage directory
 coverage/
 *.lcov
-
-# nyc test coverage
 .nyc_output
 
 # Dependency directories
@@ -53,7 +60,7 @@ jspm_packages/
 # Yarn Integrity file
 .yarn-integrity
 
-# parcel-bundler cache (https://parceljs.org/)
+# parcel-bundler cache
 .cache
 .parcel-cache
 
@@ -82,8 +89,7 @@ jspm_packages/
 .vscode-test
 
 # Editor directories and files
-.vscode/*
-!.vscode/extensions.json
+.vscode/
 .idea/
 *.suo
 *.ntvs*
@@ -104,5 +110,17 @@ Thumbs.db
 *.tmp
 *.temp
 
-# Local development
-*.local
+# Documentation
+README.md
+docs/
+*.md
+
+# Testing files
+src/**/*.test.js
+src/**/*.test.jsx
+src/**/*.test.ts
+src/**/*.test.tsx
+src/**/*.spec.js
+src/**/*.spec.jsx
+src/**/*.spec.ts
+src/**/*.spec.tsx
