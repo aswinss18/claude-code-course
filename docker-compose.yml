@@ -1,4 +1,4 @@
-services:
+dockerservices:
   ai-chat-service:
     build: ./chat-bot-api
     container_name: chat-bot-api
@@ -9,6 +9,14 @@ services:
     volumes:
       - ./chat-bot-api:/app
     restart: always
+    develop:
+      watch:
+        - action: rebuild
+          path: ./chat-bot-api
+          ignore:
+            - __pycache__/
+            - "*.pyc"
+            - .env
 
   frontend:
     build: ./chat-bot-frontend
@@ -18,3 +26,11 @@ services:
     depends_on:
       - ai-chat-service
     restart: always
+    develop:
+      watch:
+        - action: rebuild
+          path: ./chat-bot-frontend
+          ignore:
+            - node_modules/
+            - dist/
+            - "*.log"
