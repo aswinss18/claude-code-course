@@ -8,9 +8,11 @@ from datetime import datetime, timedelta
 from typing import Optional
 import psycopg2
 from psycopg2.extras import RealDictCursor
+from psycopg2 import pool
 import uvicorn
 import traceback
 import os
+import time
 
 load_dotenv()
 
@@ -30,16 +32,61 @@ class Post(BaseModel):
     description: str
     published: bool = True
 
-while True:
+# Database connection pool
+db_pool = None
+
+def init_db_pool():
+    global db_pool
     try:
-       conn =psycopg2.connect(host='localhost',database='ai-chat-bot',user='postgres',password='4166',cursor_factory=RealDictCursor)
-       cursor = conn.cursor()
-       print("🟢 🟢 🟢 Database connection was successful! 🟢 🟢 🟢")
-       break
+        db_pool = psycopg2.pool.SimpleConnectionPool(
+            1, 20,  # min and max connections
+            host='postgres',
+            database='ai-chat-bot',
+            user='postgres',
+            password='4166',
+            cursor_factory=RealDictCursor
+        )
+        print("🟢 🟢 🟢 Database connection pool created successfully! 🟢 🟢 🟢")
     except Exception as error:
-       print("🔴 🔴 🔴 Database connection was failed! 🔴 🔴 🔴")
-       print("Error:",error)
-       time.sleep(3)
+        print("🔴 🔴 🔴 Database connection pool creation failed! 🔴 🔴 🔴")
+        print("Error:", error)
+
+def get_db_connection():
+    global db_pool
+    if db_pool:
+        return db_pool.getconn()
+    return None
+
+def return_db_connection(conn):
+    global db_pool
+    if db_pool and conn:
+        db_pool.putconn(conn)
+
+from contextlib import contextmanager
+
+@contextmanager
+def get_db_cursor():
+    """Context manager for database operations"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db_connection()
+        if not conn:
+            raise Exception("Database connection not available")
+        cursor = conn.cursor()
+        yield cursor
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        raise e
+    else:
+        if conn:
+            conn.commit()
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            return_db_connection(conn)
 
 # Initialize Anthropic client with API key from environment
 api_key = os.getenv("ANTHROPIC_API_KEY")
@@ -182,6 +229,19 @@ def chat(messages, system=None, temperature=0, stop_sequences=None):
 # In production, use Redis or a database
 conversation_store = {}
 
+@app.on_event("startup")
+async def startup_event():
+    """Initialize database connection pool on startup"""
+    init_db_pool()
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Close database connection pool on shutdown"""
+    global db_pool
+    if db_pool:
+        db_pool.closeall()
+        print("🔴 Database connection pool closed")
+
 @app.get("/")
 async def root():
     return {"message": "FastAPI server is running!"}
@@ -222,11 +282,16 @@ async def reset_conversation():
     conversation_store["default"] = []
     return {"message": "Conversation reset successfully"}
 
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)
-
 @app.get("/users")
 async def get_users():
-    cursor.execute("SELECT * FROM users")
-    users = cursor.fetchall()
-    return {"data": users}
+    try:
+        with get_db_cursor() as cursor:
+            cursor.execute("SELECT * FROM users")
+            users = cursor.fetchall()
+            return {"data": users}
+    except Exception as e:
+        print(f"Database error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)

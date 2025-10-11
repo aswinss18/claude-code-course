@@ -1,4 +1,17 @@
 services:
+  postgres:
+    image: postgres:15
+    container_name: postgres-db
+    environment:
+      POSTGRES_DB: ai-chat-bot
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 4166
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: always
+
   ai-chat-service:
     build: ./chat-bot-api
     container_name: chat-bot-api
@@ -8,6 +21,8 @@ services:
       - ./chat-bot-api/.env
     volumes:
       - ./chat-bot-api:/app
+    depends_on:
+      - postgres
     restart: always
     develop:
       watch:
@@ -34,3 +49,6 @@ services:
             - node_modules/
             - dist/
             - "*.log"
+
+volumes:
+  postgres_data:
