@@ -41,6 +41,11 @@ venv.bak/
 # Environment variables (keep .env for Docker build if needed)
 # .env
 
+# Node.js files (not needed for Python API)
+package.json
+package-lock.json
+node_modules/
+
 # IDE
 .vscode/
 .idea/
