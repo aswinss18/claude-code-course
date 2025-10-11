@@ -1,4 +1,4 @@
-dockerservices:
+services:
   ai-chat-service:
     build: ./chat-bot-api
     container_name: chat-bot-api
