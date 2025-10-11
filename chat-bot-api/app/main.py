@@ -5,6 +5,9 @@ from anthropic import Anthropic
 from anthropic.types import ToolParam
 from pydantic import BaseModel
 from datetime import datetime, timedelta
+from typing import Optional
+import psycopg2
+from psycopg2.extras import RealDictCursor
 import uvicorn
 import traceback
 import os
@@ -22,6 +25,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+class Post(BaseModel):
+    title: str
+    description: str
+    published: bool = True
+
+while True:
+    try:
+       conn =psycopg2.connect(host='localhost',database='ai-chat-bot',user='postgres',password='4166',cursor_factory=RealDictCursor)
+       cursor = conn.cursor()
+       print("🟢 🟢 🟢 Database connection was successful! 🟢 🟢 🟢")
+       break
+    except Exception as error:
+       print("🔴 🔴 🔴 Database connection was failed! 🔴 🔴 🔴")
+       print("Error:",error)
+       time.sleep(3)
+
 # Initialize Anthropic client with API key from environment
 api_key = os.getenv("ANTHROPIC_API_KEY")
 if not api_key:
@@ -33,6 +52,16 @@ model = "claude-3-haiku-20240307"  # Using a stable model
 
 class ChatRequest(BaseModel):
     message: str
+
+class User(BaseModel):
+    id: int
+    username: str
+    email: str
+    subscriber: bool
+    created_at: datetime
+    updated_at: datetime
+    password: str
+    ai_personality: Optional[str] = None
 
 def add_user_message(messages, content):
     user_message = {"role": "user", "content": content}
@@ -195,3 +224,9 @@ async def reset_conversation():
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)
+
+@app.get("/users")
+async def get_users():
+    cursor.execute("SELECT * FROM users")
+    users = cursor.fetchall()
+    return {"data": users}
