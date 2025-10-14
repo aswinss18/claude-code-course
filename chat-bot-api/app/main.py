@@ -14,9 +14,12 @@ import traceback
 import os
 import time
 from . import models
-from .database import engine,get_db
+from .database import engine,get_db,Base
 from sqlalchemy.orm import Session
 from . import schemas
+
+# Create database tables
+models.Base.metadata.create_all(bind=engine)
 
 from contextlib import contextmanager
 
