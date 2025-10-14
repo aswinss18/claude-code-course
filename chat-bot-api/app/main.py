@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException,Depends,Response,status
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from anthropic import Anthropic
@@ -13,6 +13,12 @@ import uvicorn
 import traceback
 import os
 import time
+from . import models
+from .database import engine,get_db
+from sqlalchemy.orm import Session
+from . import schemas
+
+from contextlib import contextmanager
 
 load_dotenv()
 
@@ -27,10 +33,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-class Post(BaseModel):
-    title: str
-    description: str
-    published: bool = True
+class User(BaseModel):
+    username: str
+    email: str
+    password: str
+    subscriber: bool = False
+    ai_personality: Optional[str] = None
 
 # Database connection pool
 db_pool = None
@@ -62,7 +70,6 @@ def return_db_connection(conn):
     if db_pool and conn:
         db_pool.putconn(conn)
 
-from contextlib import contextmanager
 
 @contextmanager
 def get_db_cursor():
@@ -276,22 +283,16 @@ async def chatting(chat_request: ChatRequest):
         print(f"Traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
 
-@app.post("/reset")
+@app.post("/reset_conversation")
 async def reset_conversation():
     """Reset conversation history"""
     conversation_store["default"] = []
     return {"message": "Conversation reset successfully"}
 
-@app.get("/users")
-async def get_users():
-    try:
-        with get_db_cursor() as cursor:
-            cursor.execute("SELECT * FROM users")
-            users = cursor.fetchall()
-            return {"data": users}
-    except Exception as e:
-        print(f"Database error: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+@app.get("/users",status_code=status.HTTP_200_OK)
+def get_users(db: Session = Depends(get_db)):
+    users= db.query(models.User).all()
+    return {"data": users} 
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)
