@@ -310,7 +310,36 @@ def get_user_by_email(email: str, db: Session = Depends(get_db)):
         )
     # Convert to UserResponse format to exclude password
     user_response = schemas.UserResponse.model_validate(user)
-    return {"data": user_response} 
+    return {"data": user_response}
+
+@app.put("/user/email/{email}", status_code=status.HTTP_200_OK)    
+def update_user(user: schemas.CreateUser, db: Session = Depends(get_db)):
+    try:
+        # Check if user exists
+        existing_user = db.query(models.User).filter(models.User.email == user.email).first()
+        if not existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"User with email {user.email} not found"
+            )
+
+        # Update user data
+        for key, value in user.dict().items():
+            setattr(existing_user, key, value)
+
+        db.commit()
+        db.refresh(existing_user)
+        # Convert to UserResponse format to exclude password
+        user_response = schemas.UserResponse.model_validate(existing_user)
+        return {"message": "User updated successfully", "data": user_response}
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An error occurred while updating the user: {str(e)}"
+        )
+
 
 @app.post("/user", status_code=status.HTTP_201_CREATED)
 def create_user(new_user: schemas.CreateUser, db: Session = Depends(get_db)):
@@ -351,6 +380,116 @@ def create_user(new_user: schemas.CreateUser, db: Session = Depends(get_db)):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"An error occurred while creating the user: {str(e)}"
         ) 
+
+
+@app.put("/users/{user_id}", status_code=status.HTTP_200_OK)
+def update_user_by_id(user_id: int, user_update: schemas.UpdateUser, db: Session = Depends(get_db)):
+    try:
+        # Find existing user by ID
+        existing_user = db.query(models.User).filter(models.User.id == user_id).first()
+        if not existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"User with ID {user_id} not found"
+            )
+
+        # Check if email is being updated and if it already exists
+        if user_update.email and user_update.email != existing_user.email:
+            email_exists = db.query(models.User).filter(
+                models.User.email == user_update.email,
+                models.User.id != user_id
+            ).first()
+            if email_exists:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"User with email {user_update.email} already exists"
+                )
+
+        # Update only the fields that were provided (exclude None values)
+        update_data = user_update.dict(exclude_unset=True)
+        for key, value in update_data.items():
+            setattr(existing_user, key, value)
+
+        db.commit()
+        db.refresh(existing_user)
+        
+        # Convert to UserResponse format to exclude password
+        user_response = schemas.UserResponse.model_validate(existing_user)
+        return {"message": "User updated successfully", "data": user_response}
+
+    except IntegrityError as e:
+        db.rollback()
+        if "users_email_key" in str(e.orig):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Email already exists"
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Database constraint violation"
+            )
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An error occurred while updating the user: {str(e)}"
+        )
+
+
+@app.put("/users/email/{email}", status_code=status.HTTP_200_OK)
+def update_user_by_email(email: str, user_update: schemas.UpdateUser, db: Session = Depends(get_db)):
+    try:
+        # Find existing user by email
+        existing_user = db.query(models.User).filter(models.User.email == email).first()
+        if not existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"User with email {email} not found"
+            )
+
+        # Check if email is being updated and if it already exists
+        if user_update.email and user_update.email != existing_user.email:
+            email_exists = db.query(models.User).filter(
+                models.User.email == user_update.email
+            ).first()
+            if email_exists:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"User with email {user_update.email} already exists"
+                )
+
+        # Update only the fields that were provided (exclude None values)
+        update_data = user_update.dict(exclude_unset=True)
+        for key, value in update_data.items():
+            setattr(existing_user, key, value)
+
+        db.commit()
+        db.refresh(existing_user)
+        
+        # Convert to UserResponse format to exclude password
+        user_response = schemas.UserResponse.model_validate(existing_user)
+        return {"message": "User updated successfully", "data": user_response}
+
+    except IntegrityError as e:
+        db.rollback()
+        if "users_email_key" in str(e.orig):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Email already exists"
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Database constraint violation"
+            )
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An error occurred while updating the user: {str(e)}"
+        )
+
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)

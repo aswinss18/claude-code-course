@@ -18,6 +18,18 @@ class CreateUser(UserBase):
     password: str
 
 
+# Schema for updating a user (all fields optional)
+class UpdateUser(BaseModel):
+    username: Optional[str] = None
+    email: Optional[EmailStr] = None
+    subscriber: Optional[bool] = None
+    ai_personality: Optional[str] = None
+    password: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
 # Schema for returning user data (e.g., API responses)
 class UserResponse(UserBase):
     id: int
