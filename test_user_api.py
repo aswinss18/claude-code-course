@@ -71,7 +71,7 @@ def test_get_users():
         print(f"Status Code: {response.status_code}")
         
         if response.status_code == 200:
-            users = response.json()["data"]
+            users = response.json()["data"]  # Back to wrapped in "data"
             print(f"✅ Found {len(users)} users")
             for user in users[:3]:  # Show first 3 users
                 print(f"  - {user['username']} ({user['email']})")
@@ -91,7 +91,7 @@ def test_get_user_by_email():
         print(f"Status Code: {response.status_code}")
         
         if response.status_code == 200:
-            user = response.json()["data"]
+            user = response.json()["data"]  # Back to wrapped in "data"
             print(f"✅ Found user: {user['username']} ({user['email']})")
         elif response.status_code == 404:
             print("⚠️  User not found (might not exist)")

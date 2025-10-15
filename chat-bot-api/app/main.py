@@ -5,7 +5,7 @@ from anthropic import Anthropic
 from anthropic.types import ToolParam
 from pydantic import BaseModel
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, List
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from psycopg2 import pool
@@ -293,12 +293,14 @@ async def reset_conversation():
     conversation_store["default"] = []
     return {"message": "Conversation reset successfully"}
 
-@app.get("/users",status_code=status.HTTP_200_OK)
+@app.get("/users", status_code=status.HTTP_200_OK)
 def get_users(db: Session = Depends(get_db)):
-    users= db.query(models.User).all()
-    return {"data": users}
+    users = db.query(models.User).all()
+    # Convert to UserResponse format manually to exclude password
+    user_responses = [schemas.UserResponse.model_validate(user) for user in users]
+    return {"data": user_responses}
 
-@app.get("/users/{email}",status_code=status.HTTP_200_OK)
+@app.get("/users/{email}", status_code=status.HTTP_200_OK)
 def get_user_by_email(email: str, db: Session = Depends(get_db)):
     user = db.query(models.User).filter(models.User.email == email).first()
     if not user:
@@ -306,10 +308,12 @@ def get_user_by_email(email: str, db: Session = Depends(get_db)):
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"User with email {email} not found"
         )
-    return {"data": user} 
+    # Convert to UserResponse format to exclude password
+    user_response = schemas.UserResponse.model_validate(user)
+    return {"data": user_response} 
 
-@app.post("/user",status_code=status.HTTP_201_CREATED)
-def create_user(new_user:schemas.CreateUser,db: Session = Depends(get_db)):
+@app.post("/user", status_code=status.HTTP_201_CREATED)
+def create_user(new_user: schemas.CreateUser, db: Session = Depends(get_db)):
     try:
         # Check if user with this email already exists
         existing_user = db.query(models.User).filter(models.User.email == new_user.email).first()
@@ -324,7 +328,9 @@ def create_user(new_user:schemas.CreateUser,db: Session = Depends(get_db)):
         db.add(db_user)
         db.commit()
         db.refresh(db_user)
-        return {"message": "User created successfully", "data": db_user}
+        # Convert to UserResponse format to exclude password
+        user_response = schemas.UserResponse.model_validate(db_user)
+        return {"message": "User created successfully", "data": user_response}
     
     except IntegrityError as e:
         db.rollback()
