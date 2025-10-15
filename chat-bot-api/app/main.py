@@ -16,6 +16,7 @@ import time
 from . import models
 from .database import engine,get_db,Base
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from . import schemas
 
 # Create database tables
@@ -295,7 +296,55 @@ async def reset_conversation():
 @app.get("/users",status_code=status.HTTP_200_OK)
 def get_users(db: Session = Depends(get_db)):
     users= db.query(models.User).all()
-    return {"data": users} 
+    return {"data": users}
+
+@app.get("/users/{email}",status_code=status.HTTP_200_OK)
+def get_user_by_email(email: str, db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(models.User.email == email).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"User with email {email} not found"
+        )
+    return {"data": user} 
+
+@app.post("/user",status_code=status.HTTP_201_CREATED)
+def create_user(new_user:schemas.CreateUser,db: Session = Depends(get_db)):
+    try:
+        # Check if user with this email already exists
+        existing_user = db.query(models.User).filter(models.User.email == new_user.email).first()
+        if existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"User with email {new_user.email} already exists"
+            )
+        
+        # Create new user
+        db_user = models.User(**new_user.dict())
+        db.add(db_user)
+        db.commit()
+        db.refresh(db_user)
+        return {"message": "User created successfully", "data": db_user}
+    
+    except IntegrityError as e:
+        db.rollback()
+        # Handle unique constraint violations
+        if "users_email_key" in str(e.orig):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"User with email {new_user.email} already exists"
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Database constraint violation"
+            )
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An error occurred while creating the user: {str(e)}"
+        ) 
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)
